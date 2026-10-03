@@ -1,0 +1,12 @@
+# Account-level Unity Catalog metastore (requires Databricks account admin / appropriate Entra role).
+metastore:
+  name: "metastore-dbx-architect-lab"
+  region: "centralus"
+  # ADLS Gen2 path; must be empty or dedicated prefix for the metastore root.
+  storage_root: "abfss://dbx@adlsdbxarchitectlab.dfs.core.windows.net/metastore"
+  force_destroy: true
+  # Optional: Unity Catalog owner principal name (e.g. group or user).
+  owner: "DBX_Architect_Lab_Admin"
+  # Optional: default data access using Azure Databricks Access Connector (resource ID).
+  # access_connector_resource_id: "/subscriptions/.../resourceGroups/.../providers/Microsoft.Databricks/accessConnectors/..."
+  data_access_name: "default"

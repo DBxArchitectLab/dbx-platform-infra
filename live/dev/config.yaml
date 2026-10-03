@@ -1,0 +1,39 @@
+resource_group_name: "rg-dbx-architect-lab-dev"
+workspace_name: "dbw-dbx-architect-lab-dev"
+region: "centralus"
+pricing_tier: "premium"
+managed_resource_group_name: "rg-dbx-architect-lab-dev-managed"
+
+network:
+  no_public_ip: true
+  public_network_access_enabled: true
+  network_security_group_rules_required: "NoAzureDatabricksRules"
+
+  vnet_name: "vnet-dbx-architect-lab-dev"
+  public_subnet_name: "snet-dbx-architect-lab-dev-public"
+  private_subnet_name: "snet-dbx-architect-lab-dev-private"
+  privatelink_subnet_name: "snet-dbx-architect-lab-dev-privatelink"
+
+  vnet_cidr: [ "10.0.0.0/24" ]
+  public_subnet_cidr: [ "10.0.0.0/26" ]
+  private_subnet_cidr: [ "10.0.0.64/26" ]
+  privatelink_subnet_cidr: [ "10.0.0.128/27" ]
+
+private_endpoints:
+  ui_name: "pe-dbx-architect-lab-dev-ui"
+  auth_name: "pe-dbx-architect-lab-dev-auth"
+  backend_name: "pe-dbx-architect-lab-dev-backend"
+
+private_dns:
+  mode: "create"
+  name: "privatelink.azuredatabricks.net"
+  resource_group_name: "rg-dbx-architect-lab-dev"
+
+identity:
+  platform_admin_group_name: "DBX_Architect_Lab_Admin"
+
+tags:
+  Environment: "dev"
+  Application: "AzureDatabricks"
+  Compliance: "HIPAA"
+  Owner: "DbxArchitectLab"

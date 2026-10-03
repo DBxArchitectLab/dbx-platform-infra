@@ -1,0 +1,3 @@
+# Azure Databricks access connector (managed identity) in the environment resource group.
+access_connector:
+  name: "ac-dbx-architect-lab-dev"

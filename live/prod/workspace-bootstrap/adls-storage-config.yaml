@@ -1,0 +1,7 @@
+# ADLS Gen2 account created in the environment resource group (name must be globally unique).
+storage_account:
+  name: "stdbxarchlabprod"
+  # Container names: lowercase letters, numbers, and hyphens only (no underscores).
+  container_name: "dbx-architect-lab-prod"
+  account_tier: "Standard"
+  account_replication_type: "LRS"

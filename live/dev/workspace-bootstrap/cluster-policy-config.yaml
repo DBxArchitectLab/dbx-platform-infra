@@ -1,0 +1,25 @@
+cluster_policies:
+  shared_compute_customize:
+    description: "Shared all-purpose compute with user isolation."
+    definition:
+      node_type_id:
+        type: unlimited
+        defaultValue: Standard_D4s_v3
+      data_security_mode:
+        type: fixed
+        value: USER_ISOLATION
+      cluster_type:
+        type: fixed
+        value: all-purpose
+      azure_attributes.availability:
+        type: unlimited
+        defaultValue: ON_DEMAND_AZURE
+      autoscale.min_workers:
+        type: fixed
+        value: 1
+      autoscale.max_workers:
+        type: fixed
+        value: 1
+      autotermination_minutes:
+        type: unlimited
+        defaultValue: 120
