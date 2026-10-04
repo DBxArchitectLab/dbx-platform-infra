@@ -102,7 +102,7 @@ az storage container create --account-name adlsdbxarchitectlab -n dbx     --auth
 ```bash
 SP_NAME="sp-dbx-platform-infra"
 az ad sp create-for-rbac --name "$SP_NAME" --role Contributor --scopes "/subscriptions/$SUB"
-# Save appId (AZURE_CLIENT_ID), password (AZURE_CLIENT_SECRET) and tenant (AZURE_TENANT_ID).
+# Save appId (SP_CLIENT_ID), password (SP_CLIENT_SECRET) and tenant (AZURE_TENANT_ID).
 
 APP_ID="<appId from the output>"
 
@@ -167,8 +167,8 @@ The service principal creates the catalog, storage credential and external locat
 
    | Secret | Value |
    | --- | --- |
-   | `AZURE_CLIENT_ID` | service principal `appId` |
-   | `AZURE_CLIENT_SECRET` | service principal `password` |
+   | `SP_CLIENT_ID` | service principal `appId` |
+   | `SP_CLIENT_SECRET` | service principal `password` |
    | `AZURE_TENANT_ID` | tenant ID |
    | `AZURE_SUBSCRIPTION_ID` | subscription ID |
    | `DATABRICKS_ACCOUNT_ID` | account ID from step 3 |
