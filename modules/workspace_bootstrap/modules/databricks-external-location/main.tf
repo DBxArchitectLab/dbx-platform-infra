@@ -17,11 +17,20 @@ locals {
 # Unity Catalog validates the credential against ADLS using the connector's managed identity.
 # That identity must have data-plane RBAC on the storage account (Storage Blob Data Contributor).
 resource "azurerm_role_assignment" "access_connector_storage_blob_data_contributor" {
-  count                = var.manage_access_connector_storage_rbac && var.access_connector_principal_id != null ? 1 : 0
+  # count must be known at plan time, so it depends only on the flag. The principal ID comes from an
+  # access connector created in the same run and is unknown until apply; it's checked below instead.
+  count                = var.manage_access_connector_storage_rbac ? 1 : 0
   scope                = data.azurerm_storage_account.this.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = var.access_connector_principal_id
   principal_type       = "ServicePrincipal"
+
+  lifecycle {
+    precondition {
+      condition     = var.access_connector_principal_id != null && var.access_connector_principal_id != ""
+      error_message = "access_connector_principal_id must be set when manage_access_connector_storage_rbac is true."
+    }
+  }
 }
 
 resource "databricks_storage_credential" "this" {
