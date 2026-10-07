@@ -1,2 +1,2 @@
-# Shell scripts must keep LF endings or bash fails with $'': command not found.
+# Shell scripts must keep LF endings, or bash fails with "$'\r': command not found".
 *.sh text eol=lf

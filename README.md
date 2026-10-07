@@ -50,8 +50,10 @@ This repository provisions an Azure Databricks workspace with:
 
 ## Prerequisites
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the full setup and deployment steps. In short, the following must
-already exist:
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full setup and deployment steps.
+[`scripts/setup-azure-prerequisites.sh`](scripts/setup-azure-prerequisites.sh) creates the Azure parts, and
+[`scripts/preflight-check.sh`](scripts/preflight-check.sh) checks everything before a deployment. In short, the
+following must already exist:
 
 - Azure resource groups for each environment and for the Terraform state
 - ADLS Gen2 storage account with `tfstate` and metastore root containers
