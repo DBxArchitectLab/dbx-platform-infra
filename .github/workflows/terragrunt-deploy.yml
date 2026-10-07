@@ -35,16 +35,26 @@ jobs:
     runs-on: ubuntu-latest
     # prod-* and uat-* stacks use the matching GitHub environment; all others use "dev".
     environment: ${{ startsWith(inputs.stack, 'prod-') && 'prod' || startsWith(inputs.stack, 'uat-') && 'uat' || 'dev' }}
+    # Required secrets (GitHub environment or repository secrets):
+    #   SP_CLIENT_ID            - deployment service principal's application (client) ID, not its object ID
+    #   SP_CLIENT_SECRET        - client secret value for that service principal
+    #   AZURE_TENANT_ID         - Entra ID tenant (directory) ID
+    #   AZURE_SUBSCRIPTION_ID   - target Azure subscription; also hosts the Terraform state
+    #   DATABRICKS_ACCOUNT_ID   - Databricks account ID (account console, user menu)
+    #   DATABRICKS_METASTORE_ID - Unity Catalog metastore assigned to the workspaces
     env:
       TG_NON_INTERACTIVE: "true"
-      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      # ARM_* are read by the azurerm provider, the azurerm state backend and the Databricks
+      # account-level provider.
+      ARM_CLIENT_ID: ${{ secrets.SP_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.SP_CLIENT_SECRET }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # Read by live/*/env.hcl and live/*/workspace/terragrunt.hcl via get_env().
       DATABRICKS_ACCOUNT_ID: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
       DATABRICKS_METASTORE_ID: ${{ secrets.DATABRICKS_METASTORE_ID }}
       # Deployment service principal, granted on the catalog and external location by workspace-bootstrap.
-      DEPLOY_SP_APPLICATION_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      DEPLOY_SP_APPLICATION_ID: ${{ secrets.SP_CLIENT_ID }}
       # Terraform state backend; must match remote_state in live/root.hcl.
       TF_STATE_STORAGE_ACCOUNT: adlsdbxarchitectlab
       TF_STATE_RESOURCE_GROUP: rg-dbx-architect-lab
@@ -53,10 +63,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Signs in the Azure CLI with GitHub OIDC (no secret). Needs a federated credential on the
+      # service principal for this GitHub environment. The CLI session is used by the firewall steps
+      # and by the workspace-level Databricks provider (auth_type = "azure-cli").
       - name: Azure login
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-id: ${{ secrets.SP_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 

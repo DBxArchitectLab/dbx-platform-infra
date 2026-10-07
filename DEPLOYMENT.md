@@ -21,7 +21,7 @@ Values used throughout this guide (change them if yours differ):
 | State container | `tfstate` | `live/root.hcl` |
 | Metastore root container | `dbx` | `live/metastore/config.yaml` |
 | Environment resource groups | `rg-dbx-architect-lab-{dev,uat,prod}` | `live/<env>/config.yaml` |
-| GitHub repo | `DBxArchitectLab/dbx-platform-infra` | used for federated credentials |
+| GitHub repo | `DBxArchitectLab/dbx-platform-infra-azure` | used for federated credentials |
 
 ---
 
@@ -102,7 +102,7 @@ az storage container create --account-name adlsdbxarchitectlab -n dbx     --auth
 ```bash
 SP_NAME="sp-dbx-platform-infra"
 az ad sp create-for-rbac --name "$SP_NAME" --role Contributor --scopes "/subscriptions/$SUB"
-# Save appId (AZURE_CLIENT_ID), password (AZURE_CLIENT_SECRET) and tenant (AZURE_TENANT_ID).
+# Save appId (SP_CLIENT_ID), password (SP_CLIENT_SECRET) and tenant (AZURE_TENANT_ID).
 
 APP_ID="<appId from the output>"
 
@@ -128,7 +128,7 @@ for env in dev uat prod; do
   az ad app federated-credential create --id "$APP_ID" --parameters "{
     \"name\": \"github-$env\",
     \"issuer\": \"https://token.actions.githubusercontent.com\",
-    \"subject\": \"repo:DBxArchitectLab/dbx-platform-infra:environment:$env\",
+    \"subject\": \"repo:DBxArchitectLab/dbx-platform-infra-azure:environment:$env\",
     \"audiences\": [\"api://AzureADTokenExchange\"]
   }"
 done
@@ -167,8 +167,8 @@ The service principal creates the catalog, storage credential and external locat
 
    | Secret | Value |
    | --- | --- |
-   | `AZURE_CLIENT_ID` | service principal `appId` |
-   | `AZURE_CLIENT_SECRET` | service principal `password` |
+   | `SP_CLIENT_ID` | service principal `appId` |
+   | `SP_CLIENT_SECRET` | service principal `password` |
    | `AZURE_TENANT_ID` | tenant ID |
    | `AZURE_SUBSCRIPTION_ID` | subscription ID |
    | `DATABRICKS_ACCOUNT_ID` | account ID from step 3 |
@@ -217,7 +217,7 @@ User Access Administrator on that resource group (step 2.4).
 
 | Symptom | Likely cause |
 | --- | --- |
-| `azure/login` fails with `AADSTS70021` / no matching federated identity | Federated credential subject doesn't match `repo:DBxArchitectLab/dbx-platform-infra:environment:<env>` |
+| `azure/login` fails with `AADSTS70021` / no matching federated identity | Federated credential subject doesn't match `repo:DBxArchitectLab/dbx-platform-infra-azure:environment:<env>` |
 | `terragrunt init` 403 on the state blob | Service principal lacks Storage Blob Data Contributor on `adlsdbxarchitectlab`, or the role hasn't applied yet |
 | `MissingSubscriptionRegistration` | Step 2.1 not done |
 | `get_env` error for `ARM_SUBSCRIPTION_ID` / `DATABRICKS_*` | Secret missing in the GitHub environment the stack runs in |
