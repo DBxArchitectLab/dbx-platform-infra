@@ -7,9 +7,31 @@ Deployment order:
 
 ```
 1. Repo config  →  2. Azure prerequisites  →  3. Databricks account  →  4. GitHub setup
-                                                                             │
-   5. Deploy:  metastore  →  dev-workspace  →  dev-workspace-bootstrap  →  (uat, prod)
+                   (setup-azure-prerequisites.sh)                            │
+5. Preflight (preflight-check.sh)  →  6. Deploy:  metastore  →  dev-workspace  →  dev-workspace-bootstrap  →  (uat, prod)
 ```
+
+## Quick start
+
+Two scripts in [`scripts/`](scripts/) cover the scripted parts. Run them from Git Bash, WSL, Linux or
+macOS (not PowerShell):
+
+```bash
+# Step 2: one-time Azure setup. Idempotent; re-run it any time to fill in what's missing.
+./scripts/setup-azure-prerequisites.sh --subscription <subscription-id>
+
+# Step 3 (Databricks account console) and step 4 (GitHub secrets) are manual. The script prints the values.
+
+# Step 5: read-only checks before each deployment
+export ARM_SUBSCRIPTION_ID=<subscription-id>
+export DATABRICKS_ACCOUNT_ID=<databricks-account-id>
+export DATABRICKS_METASTORE_ID=<metastore-id>          # after the metastore exists
+export DEPLOY_SP_APPLICATION_ID=<deployment-sp-app-id>
+./scripts/preflight-check.sh                                           # everything
+./scripts/preflight-check.sh dev-dbxarchitectlab-workspace-bootstrap   # one stack
+```
+
+The rest of this guide explains each step and the equivalent manual commands.
 
 Values used throughout this guide (change them if yours differ):
 
@@ -21,7 +43,7 @@ Values used throughout this guide (change them if yours differ):
 | State container | `tfstate` | `live/root.hcl` |
 | Metastore root container | `dbx` | `live/metastore/config.yaml` |
 | Environment resource groups | `rg-dbx-architect-lab-{dev,uat,prod}` | `live/<env>/config.yaml` |
-| GitHub repo | `DBxArchitectLab/dbx-platform-infra-azure` | used for federated credentials |
+| GitHub repo | `DBxArchitectLab/dbx-platform-infra-azure` (owner ID `336295900`, repo ID `1398888571`) | federated credential subjects |
 
 ---
 
@@ -29,8 +51,8 @@ Values used throughout this guide (change them if yours differ):
 
 Edit and commit these before the first run.
 
-- [ ] **Unique names per environment in `live/<env>/workspace-bootstrap/`.** dev and uat currently use
-      identical values, and these must differ:
+- [ ] **Unique names per environment in `live/<env>/workspace-bootstrap/`.** dev, uat and prod already use
+      distinct values. Keep them distinct if you change them (`preflight-check.sh` checks this):
   - `adls-storage-config.yaml` → `storage_account.name` (globally unique across Azure, 3–24 lowercase
     letters/digits)
   - `catalog-config.yaml` → `catalog.name` (unique within the metastore, which dev/uat/prod share)
@@ -38,12 +60,22 @@ Edit and commit these before the first run.
   - `access-connector-config.yaml` → `access_connector.name` (recommended, for clarity)
 - [ ] **Metastore owner:** `metastore.owner` in `live/metastore/config.yaml` must be a principal that exists in
       the new Databricks account. Recommended: the group name `DBX_Architect_Lab_Admin` (see step 3).
-- [ ] **(Optional) VNet ranges:** dev, uat and prod all use `10.0.0.0/24`. That's fine while the VNets stay
-      isolated. Give each environment its own range if they'll ever be peered or connected to a hub network.
+- [ ] **(Optional) VNet ranges:** dev, uat and prod use `10.0.0.0/24`, `10.0.1.0/24` and `10.0.2.0/24`, so they
+      can be peered later. Keep them non-overlapping if you change them.
 
 ## 2. Azure prerequisites
 
-Run these as a user with **Owner** on the subscription.
+**Scripted:** `./scripts/setup-azure-prerequisites.sh --subscription <id>` does all of 2.1–2.4. It registers the
+providers, creates the resource groups, the storage account and containers, the service principal, its role
+assignments and federated credentials. Then it prints the GitHub secrets to set. It skips anything that
+already exists. Use `--reset-sp-secret` to issue a new client secret and `--lock-down-storage` to make the
+state storage firewall deny-by-default.
+
+The manual equivalent follows. Run it as a user with **Owner** on the subscription.
+
+> **Windows:** in Git Bash, set `export MSYS_NO_PATHCONV=1` first. Otherwise Git Bash rewrites `--scope
+> /subscriptions/...` into a Windows path and the role assignments fail. In PowerShell, pass JSON to `az`
+> through a file (`--parameters "@file.json"`), not inline.
 
 ```bash
 SUB="<subscription-id>"
@@ -71,7 +103,7 @@ The workspace stack reads its resource group; it does not create it.
 az group create -n rg-dbx-architect-lab     -l "$REGION"   # state + metastore storage
 az group create -n rg-dbx-architect-lab-dev -l "$REGION"
 az group create -n rg-dbx-architect-lab-uat -l "$REGION"
-# az group create -n rg-dbx-architect-lab-prod -l "$REGION"   # when you deploy prod
+az group create -n rg-dbx-architect-lab-prod -l "$REGION"
 ```
 
 ### 2.3 State and metastore storage account
@@ -87,15 +119,17 @@ az storage account create \
 
 SA_ID=$(az storage account show -n adlsdbxarchitectlab -g rg-dbx-architect-lab --query id -o tsv)
 
-# Give yourself data access so you can create the containers with Entra ID auth.
+# Give yourself data access so you can run Terragrunt locally (the state backend uses Entra ID auth).
 az role assignment create --assignee "$(az ad signed-in-user show --query id -o tsv)" \
   --role "Storage Blob Data Contributor" --scope "$SA_ID"
 
-az storage container create --account-name adlsdbxarchitectlab -n tfstate --auth-mode login
-az storage container create --account-name adlsdbxarchitectlab -n dbx     --auth-mode login
+# Management-plane commands don't need the data role, so they work straight away.
+az storage container-rm create --storage-account adlsdbxarchitectlab -g rg-dbx-architect-lab -n tfstate
+az storage container-rm create --storage-account adlsdbxarchitectlab -g rg-dbx-architect-lab -n dbx
 ```
 
-> Role assignments can take a few minutes to apply. If `container create` returns 403, wait and retry.
+> Subscription Owner/Contributor don't include blob data access, so without that grant a local
+> `terragrunt init` returns 403. The role takes a few minutes to apply.
 
 ### 2.4 Service principal for GitHub Actions
 
@@ -106,8 +140,8 @@ az ad sp create-for-rbac --name "$SP_NAME" --role Contributor --scopes "/subscri
 
 APP_ID="<appId from the output>"
 
-# workspace-bootstrap creates a role assignment on its ADLS account.
-for rg in rg-dbx-architect-lab-dev rg-dbx-architect-lab-uat; do
+# workspace-bootstrap creates a role assignment on its ADLS account. Include every environment, prod too.
+for rg in rg-dbx-architect-lab-dev rg-dbx-architect-lab-uat rg-dbx-architect-lab-prod; do
   az role assignment create --assignee "$APP_ID" --role "User Access Administrator" \
     --scope "/subscriptions/$SUB/resourceGroups/$rg"
 done
@@ -121,18 +155,35 @@ runner IP on `adlsdbxarchitectlab`).
 
 **Federated credentials.** The workflow's `azure/login` step signs in with GitHub OIDC (no secret), while
 Terraform uses the client secret, so the service principal needs both. Add one federated credential per
-GitHub environment:
+GitHub environment.
+
+The subject must match what this repo's OIDC token carries exactly. This repo's tokens use the ID-based
+form `repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:<env>`. Credentials made with the plain form
+(`repo:DBxArchitectLab/dbx-platform-infra:...`) stopped matching after the repo was renamed to
+`dbx-platform-infra-azure`. Look up the IDs with
+`gh api repos/DBxArchitectLab/dbx-platform-infra-azure --jq '.owner.id, .id'`.
 
 ```bash
 for env in dev uat prod; do
-  az ad app federated-credential create --id "$APP_ID" --parameters "{
-    \"name\": \"github-$env\",
-    \"issuer\": \"https://token.actions.githubusercontent.com\",
-    \"subject\": \"repo:DBxArchitectLab/dbx-platform-infra-azure:environment:$env\",
-    \"audiences\": [\"api://AzureADTokenExchange\"]
-  }"
+  cat > fic.json <<JSON
+{ "name": "github-dbx-platform-infra-azure-$env",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:DBxArchitectLab@336295900/dbx-platform-infra-azure@1398888571:environment:$env",
+  "audiences": ["api://AzureADTokenExchange"] }
+JSON
+  az ad app federated-credential create --id "$APP_ID" --parameters @fic.json
 done
+rm fic.json
 ```
+
+If the `azure/login` error shows a different subject, copy it from the error message into the credential.
+Delete credentials left over from the old repo name in **Entra ID → App registrations →
+sp-dbx-platform-infra → Certificates & secrets → Federated credentials**.
+
+**Client secret hygiene.** `create-for-rbac` and `credential reset` print the secret once. Put it straight into
+the GitHub secret and don't keep it in notes or chat. If it leaks, rotate it with
+`az ad app credential reset --id "$APP_ID" --append`, update `SP_CLIENT_SECRET` in every GitHub
+environment, then delete the old credential.
 
 ## 3. Databricks account
 
@@ -172,16 +223,34 @@ The service principal creates the catalog, storage credential and external locat
    | `AZURE_TENANT_ID` | tenant ID |
    | `AZURE_SUBSCRIPTION_ID` | subscription ID |
    | `DATABRICKS_ACCOUNT_ID` | account ID from step 3 |
-   | `DATABRICKS_METASTORE_ID` | metastore ID (set after step 5.1 or 3.4; any placeholder until then) |
+   | `DATABRICKS_METASTORE_ID` | metastore ID (set after step 6.1 or 3.4; any placeholder until then) |
 
    The `metastore` stack runs in the `dev` environment.
 
-## 5. Deploy
+## 5. Preflight
+
+Before each `apply`, run the read-only checks for the stack you're about to deploy. They use your own az login,
+so the state-access and Databricks account checks test *your* permissions, not the service principal's.
+The service principal's User Access Administrator roles are checked when `DEPLOY_SP_APPLICATION_ID` is set.
+
+```bash
+./scripts/preflight-check.sh metastore
+./scripts/preflight-check.sh dev-dbxarchitectlab-workspace
+./scripts/preflight-check.sh dev-dbxarchitectlab-workspace-bootstrap
+```
+
+It checks tool versions against the workflow, required environment variables, subscription, provider
+registration, state storage (HNS, firewall, Entra ID data access, containers), resource groups, the
+service principal's User Access Administrator, name uniqueness and global storage-name availability, and
+the Databricks account. For the account it checks API access, the `DBX_Architect_Lab_Admin` group, the
+regional metastore, `DATABRICKS_METASTORE_ID` and the metastore owner. It exits non-zero on any failure.
+
+## 6. Deploy
 
 Go to **Actions → Terragrunt Deploy Stacks → Run workflow**, choose a **stack** and an **action**. For
 each stack, run `plan` first, review the log, then run `apply`.
 
-### 5.1 Metastore (once per region)
+### 6.1 Metastore (once per region)
 
 | Stack | Action |
 | --- | --- |
@@ -191,7 +260,7 @@ Then copy the metastore ID from the account console (**Catalog → your metastor
 `metastore_id` output at the end of the apply log. Set it as `DATABRICKS_METASTORE_ID` in the `dev`,
 `uat` and `prod` environments. They share the metastore because they're in the same region.
 
-### 5.2 dev
+### 6.2 dev
 
 | Order | Stack | Creates |
 | --- | --- | --- |
@@ -200,12 +269,13 @@ Then copy the metastore ID from the account console (**Catalog → your metastor
 
 The workspace takes roughly 10–15 minutes to create.
 
-### 5.3 uat and prod
+### 6.3 uat and prod
 
-Repeat 5.2 with the `uat-*` stacks, then the `prod-*` stacks. Prod also needs its resource group (step 2.2) and
-User Access Administrator on that resource group (step 2.4).
+Repeat 6.2 with the `uat-*` stacks, then the `prod-*` stacks. Run `preflight-check.sh` for each stack first.
+Each environment needs its own resource group (step 2.2) and User Access Administrator on it (step 2.4).
+prod was missed once.
 
-## 6. Verify
+## 7. Verify
 
 - Open the workspace URL (Azure portal → the Databricks workspace → **Launch workspace**).
 - **Catalog:** the catalog from `catalog-config.yaml` is listed and attached to the metastore.
@@ -217,9 +287,13 @@ User Access Administrator on that resource group (step 2.4).
 
 | Symptom | Likely cause |
 | --- | --- |
-| `azure/login` fails with `AADSTS70021` / no matching federated identity | Federated credential subject doesn't match `repo:DBxArchitectLab/dbx-platform-infra-azure:environment:<env>` |
-| `terragrunt init` 403 on the state blob | Service principal lacks Storage Blob Data Contributor on `adlsdbxarchitectlab`, or the role hasn't applied yet |
+| `azure/login` fails with `AADSTS70021` / no matching federated identity | Federated credential subject doesn't match the token. This repo uses `repo:DBxArchitectLab@336295900/dbx-platform-infra-azure@1398888571:environment:<env>`. After a repo rename, add credentials for the new subject (step 2.4) |
+| `terragrunt init` 403 on the state blob | The identity lacks Storage Blob Data Contributor on `adlsdbxarchitectlab` (Owner/Contributor isn't enough), the role hasn't applied yet, or the storage firewall blocks your IP |
 | `MissingSubscriptionRegistration` | Step 2.1 not done |
+| Role assignment fails with a path like `C:/Program Files/Git/subscriptions/...` | Git Bash path conversion; `export MSYS_NO_PATHCONV=1` |
+| `az ... --parameters` fails to parse JSON on Windows | Pass JSON through a file (`@file.json`) |
+| workspace-bootstrap fails creating the access connector's role assignment (`AuthorizationFailed`) | Service principal lacks User Access Administrator on that environment's resource group (step 2.4, including prod) |
+| Metastore apply fails on the storage root | The `dbx` container doesn't exist in `adlsdbxarchitectlab` |
 | `get_env` error for `ARM_SUBSCRIPTION_ID` / `DATABRICKS_*` | Secret missing in the GitHub environment the stack runs in |
 | Metastore create fails: region already has a metastore | See step 3.4 |
 | Storage account name already taken | Pick a different name in `adls-storage-config.yaml` (names are global) |
@@ -237,5 +311,9 @@ export DEPLOY_SP_APPLICATION_ID="<service-principal-application-id>"
 cd live/dev/workspace && terragrunt plan
 ```
 
-Your user needs the same Azure roles and Databricks permissions as the service principal. If the state
-storage account's firewall restricts access, add your IP to it first.
+Your user needs the same Azure roles and Databricks permissions as the service principal. That includes
+**Storage Blob Data Contributor** on `adlsdbxarchitectlab`. If the state storage account's firewall restricts
+access, add your IP to it first. `./scripts/preflight-check.sh <stack>` checks all of this.
+
+Use the Terragrunt version from the workflow (`0.99.4`). Older 0.x releases differ in CLI flags and
+`root.hcl` handling.

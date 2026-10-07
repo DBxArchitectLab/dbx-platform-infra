@@ -3,6 +3,11 @@ variable "catalog_name" {
   type        = string
 }
 
+variable "workspace_id" {
+  description = "Numeric ID of the workspace the catalog is bound to. No other workspace can access the catalog."
+  type        = number
+}
+
 variable "storage_account_name" {
   description = "ADLS Gen2 storage account used as managed storage root for the catalog"
   type        = string

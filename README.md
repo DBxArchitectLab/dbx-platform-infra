@@ -14,7 +14,7 @@ This repository provisions an Azure Databricks workspace with:
 - 3 private endpoints
 - Unity Catalog metastore assignment (after metastore provisioning)
 - workspace admin assignment for an account-level group
-- optional workspace bootstrap (cluster policies, clusters, SQL warehouses)
+- workspace bootstrap (ADLS storage, access connector, Unity Catalog catalog and external location, cluster policies, secret scope)
 
 ## Deployment pattern
 
@@ -37,9 +37,14 @@ This repository provisions an Azure Databricks workspace with:
   - Optional default metastore data access using an Azure Databricks Access Connector (when configured)
 
 - **Workspace bootstrap layer (`workspace-bootstrap` stack)**
+  - ADLS Gen2 storage account and container (from `adls-storage-config.yaml`)
+  - Azure Databricks Access Connector, with Storage Blob Data Contributor on that storage account
+  - Unity Catalog storage credential and external location, with grants (from `external-location-config.yaml`)
+  - Unity Catalog catalog, with grants (from `catalog-config.yaml`)
   - Databricks cluster policies (from `cluster-policy-config.yaml`)
-  - Databricks clusters (from `cluster-config.yaml`)
-  - Databricks SQL warehouses (from `sql-warehouse-config.yaml`)
+  - Databricks secret scope (from `secret-scope-config.yaml`)
+  - Clusters and SQL warehouses (`cluster-config.yaml`, `sql-warehouse-config.yaml`) are defined but currently
+    disabled: their modules are commented out in `modules/workspace_bootstrap/main.tf`
 
 ## What this does not create
 
@@ -50,8 +55,10 @@ This repository provisions an Azure Databricks workspace with:
 
 ## Prerequisites
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the full setup and deployment steps. In short, the following must
-already exist:
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full setup and deployment steps.
+[`scripts/setup-azure-prerequisites.sh`](scripts/setup-azure-prerequisites.sh) creates the Azure parts, and
+[`scripts/preflight-check.sh`](scripts/preflight-check.sh) checks everything before a deployment. In short, the
+following must already exist:
 
 - Azure resource groups for each environment and for the Terraform state
 - ADLS Gen2 storage account with `tfstate` and metastore root containers
@@ -104,7 +111,7 @@ The environment is split into Terragrunt stacks:
 
 - `live/metastore` (Unity Catalog metastore provisioning)
 - `live/dev/workspace` (workspace + networking + UC metastore assignment)
-- `live/dev/workspace-bootstrap` (policies, clusters, SQL warehouses)
+- `live/dev/workspace-bootstrap` (storage, access connector, catalog, external location, policies, secret scope)
 
 ### Required environment variables
 

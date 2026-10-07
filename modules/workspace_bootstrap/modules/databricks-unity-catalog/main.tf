@@ -7,6 +7,16 @@ resource "databricks_catalog" "default" {
   name         = var.catalog_name
   comment      = "Default Unity Catalog bootstrap catalog."
   storage_root = local.catalog_storage_root
+
+  # Only workspaces bound below can see the catalog; other workspaces on the shared metastore can't.
+  isolation_mode = "ISOLATED"
+}
+
+resource "databricks_workspace_binding" "catalog" {
+  securable_name = databricks_catalog.default.name
+  securable_type = "catalog"
+  workspace_id   = var.workspace_id
+  binding_type   = "BINDING_TYPE_READ_WRITE"
 }
 
 resource "databricks_grants" "catalog" {
