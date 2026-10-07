@@ -250,7 +250,10 @@ regional metastore, `DATABRICKS_METASTORE_ID` and the metastore owner. It exits 
 ## 6. Deploy
 
 Go to **Actions → Terragrunt Deploy Stacks → Run workflow**, choose a **stack** and an **action**. For
-each stack, run `plan` first, review the log, then run `apply`.
+each stack, run `plan` first, review the log, then run `apply`. The run is named after the action and
+stack (for example `apply dev-dbxarchitectlab-workspace-bootstrap`). Its first step, **Show deployment
+selection**, lists the action, stack, path, GitHub environment and commit on the run's summary page.
+`apply` and `destroy` runs also get a warning there, because they don't ask for confirmation.
 
 ### 6.1 Metastore (once per region)
 

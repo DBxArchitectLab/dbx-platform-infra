@@ -78,7 +78,7 @@ echo "Preflight for: ${STACK_PATH:-all stacks}"
 # --- Tools -----------------------------------------------------------------------------------------------
 section "Tools"
 want_tf=$(sed -n 's/^ *terraform_version: *//p' "$WORKFLOW" | tr -d '\r"')
-want_tg=$(sed -n 's/^ *TG_VERSION="\(.*\)"/\1/p' "$WORKFLOW" | tr -d '\r')
+want_tg=$(sed -n 's/^ *TERRAGRUNT_VERSION: *"\{0,1\}\([0-9.]*\).*/\1/p' "$WORKFLOW" | tr -d '\r')
 for tool in az terraform terragrunt; do
   command -v "$tool" >/dev/null || { fail "$tool not found on PATH"; continue; }
   case "$tool" in
