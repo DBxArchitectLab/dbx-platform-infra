@@ -51,6 +51,7 @@ module "unity_catalog" {
   source = "./modules/databricks-unity-catalog"
 
   catalog_name             = var.catalog_name
+  workspace_id             = var.workspace_id
   storage_account_name     = module.adls_storage.storage_account_name
   storage_container_name   = module.adls_storage.container_name
   catalog_managed_prefix   = var.catalog_managed_prefix
@@ -59,6 +60,13 @@ module "unity_catalog" {
   catalog_grant_privileges = var.catalog_grant_privileges
 
   depends_on = [module.external_location]
+}
+
+# Make the bootstrap catalog the workspace default instead of the automatically created workspace catalog.
+resource "databricks_default_namespace_setting" "this" {
+  namespace {
+    value = module.unity_catalog.catalog_name
+  }
 }
 
 module "cluster_policy" {

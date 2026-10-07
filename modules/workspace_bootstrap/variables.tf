@@ -18,6 +18,11 @@ variable "workspace_resource_id" {
   type        = string
 }
 
+variable "workspace_id" {
+  description = "Numeric workspace ID; the catalog is bound to this workspace only"
+  type        = number
+}
+
 variable "resource_group_name" {
   description = "Resource group where ADLS and the Databricks access connector are created"
   type        = string
