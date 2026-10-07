@@ -103,7 +103,7 @@ The workspace stack reads its resource group; it does not create it.
 az group create -n rg-dbx-architect-lab     -l "$REGION"   # state + metastore storage
 az group create -n rg-dbx-architect-lab-dev -l "$REGION"
 az group create -n rg-dbx-architect-lab-uat -l "$REGION"
-# az group create -n rg-dbx-architect-lab-prod -l "$REGION"   # when you deploy prod
+az group create -n rg-dbx-architect-lab-prod -l "$REGION"
 ```
 
 ### 2.3 State and metastore storage account
@@ -119,7 +119,7 @@ az storage account create \
 
 SA_ID=$(az storage account show -n adlsdbxarchitectlab -g rg-dbx-architect-lab --query id -o tsv)
 
-# Give yourself data access so you can create the containers with Entra ID auth.
+# Give yourself data access so you can run Terragrunt locally (the state backend uses Entra ID auth).
 az role assignment create --assignee "$(az ad signed-in-user show --query id -o tsv)" \
   --role "Storage Blob Data Contributor" --scope "$SA_ID"
 
@@ -128,9 +128,8 @@ az storage container-rm create --storage-account adlsdbxarchitectlab -g rg-dbx-a
 az storage container-rm create --storage-account adlsdbxarchitectlab -g rg-dbx-architect-lab -n dbx
 ```
 
-> The **Storage Blob Data Contributor** grant to yourself is what lets you run Terragrunt locally. The state
-> backend uses Entra ID auth, and subscription Owner/Contributor don't include data access. The role takes
-> a few minutes to apply.
+> Subscription Owner/Contributor don't include blob data access, so without that grant a local
+> `terragrunt init` returns 403. The role takes a few minutes to apply.
 
 ### 2.4 Service principal for GitHub Actions
 
@@ -230,8 +229,9 @@ The service principal creates the catalog, storage credential and external locat
 
 ## 5. Preflight
 
-Before each `apply`, run the read-only checks for the stack you're about to deploy. They run locally with your
-own az login.
+Before each `apply`, run the read-only checks for the stack you're about to deploy. They use your own az login,
+so the state-access and Databricks account checks test *your* permissions, not the service principal's.
+The service principal's User Access Administrator roles are checked when `DEPLOY_SP_APPLICATION_ID` is set.
 
 ```bash
 ./scripts/preflight-check.sh metastore
@@ -271,8 +271,9 @@ The workspace takes roughly 10–15 minutes to create.
 
 ### 6.3 uat and prod
 
-Repeat 6.2 with the `uat-*` stacks, then the `prod-*` stacks. Prod also needs its resource group (step 2.2) and
-User Access Administrator on that resource group (step 2.4).
+Repeat 6.2 with the `uat-*` stacks, then the `prod-*` stacks. Run `preflight-check.sh` for each stack first.
+Each environment needs its own resource group (step 2.2) and User Access Administrator on it (step 2.4).
+prod was missed once.
 
 ## 7. Verify
 
