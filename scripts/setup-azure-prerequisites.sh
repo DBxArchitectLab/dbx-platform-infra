@@ -277,8 +277,8 @@ cat <<EOF
 
 GitHub → Settings → Environments → (${ENVIRONMENTS// /, }) → add these secrets to each:
 
-  AZURE_CLIENT_ID          $APP_ID
-  AZURE_CLIENT_SECRET      ${NEW_SECRET:-<unchanged; existing secret>}
+  SP_CLIENT_ID             $APP_ID
+  SP_CLIENT_SECRET         ${NEW_SECRET:-<unchanged; existing secret>}
   AZURE_TENANT_ID          $TENANT_ID
   AZURE_SUBSCRIPTION_ID    $SUB
   DATABRICKS_ACCOUNT_ID    <from https://accounts.azuredatabricks.net, user menu>

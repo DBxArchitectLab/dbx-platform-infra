@@ -123,7 +123,7 @@ environment variables and fails if they are missing:
 | `ARM_SUBSCRIPTION_ID` | Target subscription for resources and the Terraform state backend |
 | `DATABRICKS_ACCOUNT_ID` | Databricks account-level provider |
 | `DATABRICKS_METASTORE_ID` | Unity Catalog metastore assigned to the workspace (`*/workspace` stacks and their dependents) |
-| `DEPLOY_SP_APPLICATION_ID` | Application ID of the deployment service principal, granted on the catalog and external location (`*/workspace-bootstrap` stacks). In GitHub Actions it comes from `AZURE_CLIENT_ID`. |
+| `DEPLOY_SP_APPLICATION_ID` | Application ID of the deployment service principal, granted on the catalog and external location (`*/workspace-bootstrap` stacks). In GitHub Actions it comes from `SP_CLIENT_ID`. |
 
 For local runs, export them before calling `terragrunt`:
 

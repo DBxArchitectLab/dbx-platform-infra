@@ -136,7 +136,7 @@ az storage container-rm create --storage-account adlsdbxarchitectlab -g rg-dbx-a
 ```bash
 SP_NAME="sp-dbx-platform-infra"
 az ad sp create-for-rbac --name "$SP_NAME" --role Contributor --scopes "/subscriptions/$SUB"
-# Save appId (AZURE_CLIENT_ID), password (AZURE_CLIENT_SECRET) and tenant (AZURE_TENANT_ID).
+# Save appId (SP_CLIENT_ID), password (SP_CLIENT_SECRET) and tenant (AZURE_TENANT_ID).
 
 APP_ID="<appId from the output>"
 
@@ -182,7 +182,7 @@ sp-dbx-platform-infra → Certificates & secrets → Federated credentials**.
 
 **Client secret hygiene.** `create-for-rbac` and `credential reset` print the secret once. Put it straight into
 the GitHub secret and don't keep it in notes or chat. If it leaks, rotate it with
-`az ad app credential reset --id "$APP_ID" --append`, update `AZURE_CLIENT_SECRET` in every GitHub
+`az ad app credential reset --id "$APP_ID" --append`, update `SP_CLIENT_SECRET` in every GitHub
 environment, then delete the old credential.
 
 ## 3. Databricks account
@@ -218,8 +218,8 @@ The service principal creates the catalog, storage credential and external locat
 
    | Secret | Value |
    | --- | --- |
-   | `AZURE_CLIENT_ID` | service principal `appId` |
-   | `AZURE_CLIENT_SECRET` | service principal `password` |
+   | `SP_CLIENT_ID` | service principal `appId` |
+   | `SP_CLIENT_SECRET` | service principal `password` |
    | `AZURE_TENANT_ID` | tenant ID |
    | `AZURE_SUBSCRIPTION_ID` | subscription ID |
    | `DATABRICKS_ACCOUNT_ID` | account ID from step 3 |
