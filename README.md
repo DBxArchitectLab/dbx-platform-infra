@@ -40,7 +40,9 @@ This repository provisions an Azure Databricks workspace with:
   - ADLS Gen2 storage account and container (from `adls-storage-config.yaml`)
   - Azure Databricks Access Connector, with Storage Blob Data Contributor on that storage account
   - Unity Catalog storage credential and external location, with grants (from `external-location-config.yaml`)
-  - Unity Catalog catalog, with grants (from `catalog-config.yaml`)
+  - Unity Catalog catalog, with grants (from `catalog-config.yaml`). It's isolated and bound to this
+    environment's workspace only, so `dbxarchitectlab_dev` is visible in dev but not in uat or prod
+  - Workspace default catalog set to that catalog
   - Databricks cluster policies (from `cluster-policy-config.yaml`)
   - Databricks secret scope (from `secret-scope-config.yaml`)
   - Clusters and SQL warehouses (`cluster-config.yaml`, `sql-warehouse-config.yaml`) are defined but currently
@@ -52,6 +54,9 @@ This repository provisions an Azure Databricks workspace with:
 - Terraform state storage account
 - NAT Gateway
 - UC schemas
+
+It also doesn't remove the workspace catalog (`dbw_dbx_architect_lab_<env>`) that Databricks creates
+automatically for each workspace. Drop it by hand; see DEPLOYMENT.md step 7.
 
 ## Prerequisites
 
@@ -89,21 +94,17 @@ For the `workspace-bootstrap` stack, the Databricks provider is configured with:
 
 - `host` = workspace URL (from the `workspace` stack output)
 - `azure_workspace_resource_id` = Azure resource ID of the workspace
+- `auth_type = "azure-cli"`: it always uses the Azure CLI's signed-in identity, never `ARM_CLIENT_SECRET`
 
-Supported authentication flows:
+So the identity depends on where it runs:
 
-- **Local development (recommended)**: Azure CLI
-  - Run `az login` with a user that has access to the workspace subscription/tenant.
-  - Optionally run `az account set --subscription "<subscription-id>"`.
-  - Then run `terragrunt` in `live/dev/workspace-bootstrap`.
+- **Locally:** whoever ran `az login`. That user needs access to the workspace and the same Unity Catalog
+  permissions as the service principal.
+- **GitHub Actions:** the service principal, signed in to the CLI by the `azure/login` step with GitHub OIDC.
+  That step needs a federated credential for the GitHub environment (DEPLOYMENT.md step 2.4).
 
-- **CI/CD (GitHub Actions)**: Service principal
-  - Use the same service principal variables already defined for Terraform:
-    - `ARM_CLIENT_ID`
-    - `ARM_CLIENT_SECRET`
-    - `ARM_TENANT_ID`
-    - `ARM_SUBSCRIPTION_ID`
-  - These are already wired in `.github/workflows/terragrunt-deploy.yml`.
+The other providers (azurerm, the state backend and the account-level Databricks provider) read the
+`ARM_*` variables, which the workflow sets from the `SP_CLIENT_ID` / `SP_CLIENT_SECRET` secrets.
 
 ## Run
 
