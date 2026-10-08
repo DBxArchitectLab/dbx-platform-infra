@@ -153,9 +153,11 @@ az role assignment create --assignee "$APP_ID" --role "Storage Blob Data Contrib
 `Contributor` on the subscription also covers the workflow's firewall steps (adding and removing the
 runner IP on `adlsdbxarchitectlab`).
 
-**Federated credentials.** The workflow's `azure/login` step signs in with GitHub OIDC (no secret), while
-Terraform uses the client secret, so the service principal needs both. Add one federated credential per
-GitHub environment.
+**Federated credentials.** The service principal needs both a federated credential and a client secret.
+The workflow's `azure/login` step signs in the Azure CLI with GitHub OIDC (no secret). The firewall steps
+and the workspace-level Databricks provider in `workspace-bootstrap` (`auth_type = "azure-cli"`) use that
+session. azurerm, the state backend and the account-level Databricks provider use the client secret
+(`ARM_CLIENT_SECRET`). Add one federated credential per GitHub environment.
 
 The subject must match what this repo's OIDC token carries exactly. This repo's tokens use the ID-based
 form `repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:<env>`. Credentials made with the plain form
@@ -248,7 +250,10 @@ regional metastore, `DATABRICKS_METASTORE_ID` and the metastore owner. It exits 
 ## 6. Deploy
 
 Go to **Actions → Terragrunt Deploy Stacks → Run workflow**, choose a **stack** and an **action**. For
-each stack, run `plan` first, review the log, then run `apply`.
+each stack, run `plan` first, review the log, then run `apply`. The run is named after the action and
+stack (for example `apply dev-dbxarchitectlab-workspace-bootstrap`). Its first step, **Show deployment
+selection**, lists the action, stack, path, GitHub environment and commit on the run's summary page.
+`apply` and `destroy` runs also get a warning there, because they don't ask for confirmation.
 
 ### 6.1 Metastore (once per region)
 
@@ -265,7 +270,7 @@ Then copy the metastore ID from the account console (**Catalog → your metastor
 | Order | Stack | Creates |
 | --- | --- | --- |
 | 1 | `dev-dbxarchitectlab-workspace` | VNet, subnets, NSG, private DNS, private endpoints, workspace, metastore assignment, admin group assignment |
-| 2 | `dev-dbxarchitectlab-workspace-bootstrap` | ADLS account and container, access connector, storage credential, external location, catalog, cluster policies, secret scope |
+| 2 | `dev-dbxarchitectlab-workspace-bootstrap` | ADLS account and container, access connector, storage credential, external location, catalog (bound to this workspace only), workspace default catalog, cluster policies, secret scope |
 
 The workspace takes roughly 10–15 minutes to create.
 
@@ -278,10 +283,24 @@ prod was missed once.
 ## 7. Verify
 
 - Open the workspace URL (Azure portal → the Databricks workspace → **Launch workspace**).
-- **Catalog:** the catalog from `catalog-config.yaml` is listed and attached to the metastore.
+- **Catalog:** the catalog from `catalog-config.yaml` is listed. Under **Details → Workspaces** it shows
+  only this environment's workspace. It isn't visible in the other environments' workspaces.
+- **Settings → Workspace admin → Advanced → Default catalog:** set to that catalog.
 - **Catalog → External data:** the external location shows a successful connection test.
 - **Compute → Policies:** the cluster policies from `cluster-policy-config.yaml` exist.
 - **Settings → Identity and access:** `DBX_Architect_Lab_Admin` is a workspace admin.
+
+### Drop the automatic workspace catalog (once per workspace)
+
+Databricks creates a workspace catalog named after each workspace (`dbw_dbx_architect_lab_dev`, `_uat`,
+`_prod`), bound to that workspace. Terraform doesn't manage it. After the bootstrap `apply` has moved the
+default catalog, drop it from a SQL editor **in that workspace**, as a metastore admin:
+
+```sql
+DROP CATALOG IF EXISTS dbw_dbx_architect_lab_dev CASCADE;   -- _uat in uat, _prod in prod
+```
+
+`CASCADE` deletes everything in it, so check first that nobody has created tables there. It isn't recreated.
 
 ## Troubleshooting
 
@@ -298,6 +317,7 @@ prod was missed once.
 | Metastore create fails: region already has a metastore | See step 3.4 |
 | Storage account name already taken | Pick a different name in `adls-storage-config.yaml` (names are global) |
 | Permission denied creating catalog / external location | Service principal isn't a metastore admin (step 3) |
+| `dbxarchitectlab_dev` isn't visible from the uat or prod workspace (and so on) | Expected: each catalog is isolated to its own workspace |
 
 ## Running locally instead
 

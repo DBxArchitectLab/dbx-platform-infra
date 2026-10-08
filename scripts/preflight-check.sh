@@ -78,7 +78,7 @@ echo "Preflight for: ${STACK_PATH:-all stacks}"
 # --- Tools -----------------------------------------------------------------------------------------------
 section "Tools"
 want_tf=$(sed -n 's/^ *terraform_version: *//p' "$WORKFLOW" | tr -d '\r"')
-want_tg=$(sed -n 's/^ *TG_VERSION="\(.*\)"/\1/p' "$WORKFLOW" | tr -d '\r')
+want_tg=$(sed -n 's/^ *TERRAGRUNT_VERSION: *"\{0,1\}\([0-9.]*\).*/\1/p' "$WORKFLOW" | tr -d '\r')
 for tool in az terraform terragrunt; do
   command -v "$tool" >/dev/null || { fail "$tool not found on PATH"; continue; }
   case "$tool" in
@@ -176,7 +176,9 @@ else
 fi
 
 # --- Per-environment checks ------------------------------------------------------------------------------
-declare -A SEEN
+# "kind|value=env" lines. A plain string, not an associative array, so it also runs on macOS's bash 3.2.
+SEEN=""
+seen_by() { awk -F= -v k="$1" '$1 == k { print $2; exit }' <<<"$SEEN"; }
 for env in $ENVS; do
   cfg="$ROOT/live/$env/config.yaml"
   bs="$ROOT/live/$env/workspace-bootstrap"
@@ -212,11 +214,12 @@ for env in $ENVS; do
   cidr=$(sed -n 's/^[[:space:]]*vnet_cidr:.*"\(.*\)".*/\1/p' "$cfg" | tr -d '\r')
   for pair in "storage account:$sa" "catalog:$catalog" "external location:$extloc" "VNet CIDR:$cidr"; do
     kind=${pair%%:*}; val=${pair#*:}
-    if [[ -n "${SEEN[$kind|$val]:-}" ]]; then
-      [[ "$kind" == "VNet CIDR" ]] && warn "$kind $val also used by ${SEEN[$kind|$val]} (fine unless peered)" \
-                                   || fail "$kind $val also used by ${SEEN[$kind|$val]}; must be unique"
+    other=$(seen_by "$kind|$val")
+    if [[ -n "$other" ]]; then
+      [[ "$kind" == "VNet CIDR" ]] && warn "$kind $val also used by $other (fine unless peered)" \
+                                   || fail "$kind $val also used by $other; must be unique"
     fi
-    SEEN[$kind|$val]=$env
+    SEEN+="$kind|$val=$env"$'\n'
   done
 
   if [[ "$(az_tsv storage account check-name -n "$sa" --query nameAvailable)" == "true" ]]; then

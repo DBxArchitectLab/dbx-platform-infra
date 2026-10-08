@@ -79,7 +79,8 @@ retry() {
   local i
   for ((i = 1; i <= attempts; i++)); do
     if "$@"; then return 0; fi
-    warn "attempt $i/$attempts failed; waiting 30s for propagation..."
+    # stderr, so callers that capture the command's output (SP_OBJECT_ID=$(retry ...)) don't capture this.
+    warn "attempt $i/$attempts failed; waiting 30s for propagation..." >&2
     sleep 30
   done
   return 1
